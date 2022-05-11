@@ -3,6 +3,7 @@
 #include <Ultrasonic.h>
 #include <SPI.h>
 #include <Adafruit_MotorShield.h>
+#include <PID_v1.h>
 
 #include <WiFi.h>
 #include <ESPmDNS.h>
@@ -14,11 +15,12 @@ const char *password = "crunchlab";
 unsigned long previousMillis;
 
 // Entre 0 et 1
-#define SPEED_FACTOR 0.5
+#define SPEED_FACTOR 1
+/*
 #define Kp 0.05
 #define Ki 1
 #define Kd 2.5
-
+*/
 /*
   MOTOR
 */
@@ -41,12 +43,26 @@ const uint8_t SensorCount = 8;
 uint16_t sensorValues[SensorCount];
 int last_error = 0;
 int error = 0;
+int sum_error = 0;
 
 /*
   ULTRASON
 */
 Ultrasonic ultrasonic(17, 16);
 int distance;
+
+/*
+  PID
+*/
+double Setpoint, Input, Output;
+
+//Specify the links and initial tuning parameters
+double Kp=0.075, Ki=0.001, Kd=0.005; //0.1 OK 
+// 0.05 0.005 et 0 // 14.29
+// Kp=0.05, Ki=0.005, Kd=0.05; 14.5
+// Kp=0.1, Ki=0.000, Kd=0.0; 14
+// Kp=0.05, Ki=0.005, Kd=0.005; sympa
+PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
 
 void initOTA()
 {
@@ -119,6 +135,7 @@ void calibrationLine()
     Serial.print(qtr.calibrationOn.maximum[i]);
     Serial.print(' ');
   }
+  myPID.SetMode(AUTOMATIC);
   Serial.println();
   Serial.println();
 }
@@ -191,8 +208,15 @@ void stop()
 void PIDLineFollower(int position, int goal)
 {
   error = position - goal;
-  int motorSpeed = Kp * error + Kd * (error - last_error);
+  sum_error += error;
+
+  int motorSpeed = Kp * error + Ki * sum_error + Kd * (error - last_error);
+
   last_error = error;
+
+  if(position == 3500){
+    sum_error = 0;
+  }
 
   if (position > 3500)
   {
@@ -227,14 +251,50 @@ void PIDLineFollower(int position, int goal)
   Serial.print(" speed gauche = ");
   Serial.print(speed_gauche);
   Serial.print(" speed droit = ");
-  Serial.println(speed_droite);
+  Serial.print(speed_droite);
+  Serial.print(" error = ");
+  Serial.print(error);
+  Serial.print(" somme = ");
+  Serial.println(sum_error);
 }
 
+void PID_test(int position, int goal){
+  int real_pos = position;
+
+  if(real_pos > 3500){
+    int diff = position-3500;
+    Input = 3500-diff;
+  }
+  else{
+    Input = position;
+  }
+
+  Setpoint = goal;
+  myPID.Compute();
+  Serial.print(" ");
+  Serial.print(Output);
+  
+  if(real_pos > 3500){
+    turn(255, 255-Output, 2);
+    Serial.print("Gauche : ");
+    Serial.print(255);
+    Serial.print(" Droite : ");
+    Serial.println(255-Output);
+  }
+  else{
+    turn(255-Output, 255, 2);
+    Serial.print("Gauche : ");
+    Serial.print(255-Output);
+    Serial.print(" Droite : ");
+    Serial.println(255);
+  }
+
+}
 void setup()
 {
   Serial.begin(115200);
   // configure the sensors
-
+/*
   Serial.println("Booting");
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
@@ -246,7 +306,7 @@ void setup()
   }
 
   initOTA();
-
+*/
   Serial.println("Ready");
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
@@ -309,11 +369,14 @@ void loop()
 {
   // read calibrated sensor values and obtain a measure of the line position
   // from 0 to 5000 (for a white line, use readLineWhite() instead)
-  ArduinoOTA.handle();
+  //ArduinoOTA.handle();
+  
   int pos = getPositionLine();
   // getDistanceUS();
-  LineFollower(pos);
+  //LineFollower(pos);
 
-  //PIDLineFollower(pos,3500);
+  //turn(255,255, 1);
+  //Serial.println();
+  PID_test(pos,3500);
   //delay(10);
 }
