@@ -21,6 +21,7 @@ unsigned long previousMillis;
 #define Ki 1
 #define Kd 2.5
 */
+
 /*
   MOTOR
 */
@@ -34,6 +35,7 @@ Adafruit_DCMotor *myMotor4 = AFMS.getMotor(4);
 Adafruit_DCMotor tab[] = {*myMotor1, *myMotor2, *myMotor3, *myMotor4};
 int speed_gauche = 0;
 int speed_droite = 0;
+
 /*
   LINE FOLLOWER
 */
@@ -327,42 +329,7 @@ void setup()
   myMotor1->setSpeed(250);
   myMotor1->run(FORWARD);
   myMotor1->run(RELEASE);
-  /*
-  delay(1000);
-  turn(250,250,1);
-  delay(700);
-  turn(250,0,1);
-  delay(1700);
-  turn(250, 250,1);
-  delay(2800);
-  turn(0,250,1);
-  delay(1500);
-  turn(250, 250,1);
-  delay(900);
-  stop();
-  delay(3000);
-  turn(250, 250,2);
-  delay(2300);
-  stop();
-  delay(1000);
-  turn(250,250,1);
-  delay(700);
-  turn(0,250,1);
-  delay(1550);
 
-  turn(250,250,1);
-  delay(7000);
-
-  delay(3000);
-  turn(250, 250,2);
-  delay(800);
-  turn(250, 50,2);
-  delay(2700);
-  turn(250, 250,1);
-  delay(7000);
-
-  stop();
-*/
 }
 
 void loop()
@@ -373,10 +340,11 @@ void loop()
   
   int pos = getPositionLine();
   // getDistanceUS();
-  //LineFollower(pos);
 
-  //turn(255,255, 1);
-  //Serial.println();
+  /* V1 */
+  //LineFollower(pos);
+  
+  /* V2 */
   PID_test(pos,3500);
-  //delay(10);
+
 }
