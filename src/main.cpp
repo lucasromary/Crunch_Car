@@ -28,9 +28,9 @@ unsigned long previousMillis;
 Adafruit_MotorShield AFMS = Adafruit_MotorShield();
 
 Adafruit_DCMotor *myMotor1 = AFMS.getMotor(1);
-Adafruit_DCMotor *myMotor2 = AFMS.getMotor(2);
-Adafruit_DCMotor *myMotor3 = AFMS.getMotor(3);
-Adafruit_DCMotor *myMotor4 = AFMS.getMotor(4);
+Adafruit_DCMotor *myMotor2 = AFMS.getMotor(4);
+Adafruit_DCMotor *myMotor3 = AFMS.getMotor(2);
+Adafruit_DCMotor *myMotor4 = AFMS.getMotor(3);
 
 Adafruit_DCMotor tab[] = {*myMotor1, *myMotor2, *myMotor3, *myMotor4};
 int speed_gauche = 0;
@@ -145,14 +145,14 @@ void calibrationLine()
 int getPositionLine()
 {
   uint16_t position = qtr.readLineBlack(sensorValues);
-/*
+
   for (uint8_t i = 0; i < SensorCount; i++)
   {
     Serial.print(sensorValues[i]);
     Serial.print('\t');
   }
-  */
-  Serial.print(position);
+  Serial.print("   ");
+  Serial.println(position);
   return position;
 }
 
@@ -167,10 +167,17 @@ int getDistanceUS()
 void turn(int speed_gauche, int speed_droite, int sens)
 {
   uint8_t i = 0;
+  /*
   for (int j = 0; j < 4; j++)
   {
     tab[j].run(sens);
   }
+  */
+  tab[0].run(FORWARD);
+  tab[1].run(BACKWARD);
+  tab[2].run(FORWARD);
+  tab[3].run(BACKWARD);
+
   tab[0].setSpeed(speed_gauche * SPEED_FACTOR);
   tab[1].setSpeed(speed_gauche * SPEED_FACTOR);
   tab[2].setSpeed(speed_droite * SPEED_FACTOR);
@@ -189,12 +196,12 @@ void LineFollower(int position)
     speed_droite = 255;
     speed_gauche = (position) / 13.73;
   }
-  Serial.print(" speed gauche = ");
-  Serial.print(speed_gauche);
-  Serial.print(" speed droit = ");
-  Serial.println(speed_droite);
+  //Serial.print(" speed gauche = ");
+  //Serial.print(speed_gauche);
+  //Serial.print(" speed droit = ");
+  //Serial.println(speed_droite);
 
-  turn(speed_gauche, speed_droite, 2);
+  turn(speed_gauche, speed_droite, 1);
 }
 
 void stop()
@@ -292,6 +299,7 @@ void PID_test(int position, int goal){
   }
 
 }
+
 void setup()
 {
   Serial.begin(115200);
@@ -308,13 +316,14 @@ void setup()
   }
 
   initOTA();
-*/
+
   Serial.println("Ready");
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
-
+*/
   qtr.setTypeRC();
-  qtr.setSensorPins((const uint8_t[]){21, 18, 12, 27, 14, 32, 15, 33}, SensorCount);
+  //qtr.setSensorPins((const uint8_t[]){21, 18, 12, 27, 14, 32, 15, 33}, SensorCount);
+  qtr.setSensorPins((const uint8_t[]){19, 12, 27, 33, 32, 15, 14, 21}, SensorCount);
   calibrationLine();
 
   if (!AFMS.begin())
@@ -342,9 +351,9 @@ void loop()
   // getDistanceUS();
 
   /* V1 */
-  //LineFollower(pos);
+  LineFollower(pos);
   
   /* V2 */
-  PID_test(pos,3500);
+  // PID_test(pos,3500);
 
 }
