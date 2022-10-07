@@ -14,6 +14,17 @@ const char *ssid = "crunchlab";
 const char *password = "crunchlab";
 unsigned long previousMillis;
 
+#include <Adafruit_DotStar.h>
+
+// There is only one pixel on the board
+#define NUMPIXELS 20
+
+// Use these pin definitions for the ItsyBitsy M4
+#define DATAPIN 5
+#define CLOCKPIN 4 // 13
+
+Adafruit_DotStar strip(NUMPIXELS, DATAPIN, CLOCKPIN, DOTSTAR_BRG);
+
 // Entre 0 et 1
 #define SPEED_FACTOR 1
 /*
@@ -50,21 +61,48 @@ int sum_error = 0;
 /*
   ULTRASON
 */
-Ultrasonic ultrasonic(17, 16);
-int distance;
+Ultrasonic ultrasonic(17);
+long RangeInInches;
+long RangeInCentimeters;
 
 /*
   PID
 */
 double Setpoint, Input, Output;
 
-//Specify the links and initial tuning parameters
-double Kp=0.075, Ki=0.001, Kd=0.005; //0.1 OK 
+// Specify the links and initial tuning parameters
+double Kp = 0.075, Ki = 0.001, Kd = 0.005; // 0.1 OK
 // 0.05 0.005 et 0 // 14.29
 // Kp=0.05, Ki=0.005, Kd=0.05; 14.5
 // Kp=0.1, Ki=0.000, Kd=0.0; 14
 // Kp=0.05, Ki=0.005, Kd=0.005; sympa
 PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
+
+void rainbow(int wait)
+{
+  // Hue of first pixel runs 5 complete loops through the color wheel.
+  // Color wheel has a range of 65536 but it's OK if we roll over, so
+  // just count from 0 to 5*65536. Adding 256 to firstPixelHue each time
+  // means we'll make 5*65536/256 = 1280 passes through this outer loop:
+  for (long firstPixelHue = 0; firstPixelHue < 5 * 65536; firstPixelHue += 256)
+  {
+    for (int i = 0; i < strip.numPixels(); i++)
+    { // For each pixel in strip...
+      // Offset pixel hue by an amount to make one full revolution of the
+      // color wheel (range of 65536) along the length of the strip
+      // (strip.numPixels() steps):
+      int pixelHue = firstPixelHue + (i * 65536L / strip.numPixels());
+      // strip.ColorHSV() can take 1 or 3 arguments: a hue (0 to 65535) or
+      // optionally add saturation and value (brightness) (each 0 to 255).
+      // Here we're using just the single-argument hue variant. The result
+      // is passed through strip.gamma32() to provide 'truer' colors
+      // before assigning to each pixel:
+      strip.setPixelColor(i, strip.gamma32(strip.ColorHSV(pixelHue)));
+    }
+    strip.show(); // Update strip with new contents
+    delay(wait);  // Pause for a moment
+  }
+}
 
 void initOTA()
 {
@@ -158,10 +196,9 @@ int getPositionLine()
 
 int getDistanceUS()
 {
-  distance = ultrasonic.read();
-  Serial.print(" Distance in CM US: ");
-  Serial.println(distance);
-  return distance;
+  RangeInCentimeters = ultrasonic.read(CM); // two measurements should keep an interval
+  Serial.println(RangeInCentimeters);                       // 0~400cm
+  //Serial.println(" cm");
 }
 
 void turn(int speed_gauche, int speed_droite, int sens)
@@ -196,10 +233,10 @@ void LineFollower(int position)
     speed_droite = 255;
     speed_gauche = (position) / 13.73;
   }
-  //Serial.print(" speed gauche = ");
-  //Serial.print(speed_gauche);
-  //Serial.print(" speed droit = ");
-  //Serial.println(speed_droite);
+  // Serial.print(" speed gauche = ");
+  // Serial.print(speed_gauche);
+  // Serial.print(" speed droit = ");
+  // Serial.println(speed_droite);
 
   turn(speed_gauche, speed_droite, 1);
 }
@@ -223,7 +260,8 @@ void PIDLineFollower(int position, int goal)
 
   last_error = error;
 
-  if(position == 3500){
+  if (position == 3500)
+  {
     sum_error = 0;
   }
 
@@ -267,14 +305,17 @@ void PIDLineFollower(int position, int goal)
   Serial.println(sum_error);
 }
 
-void PID_test(int position, int goal){
+void PID_test(int position, int goal)
+{
   int real_pos = position;
 
-  if(real_pos > 3500){
-    int diff = position-3500;
-    Input = 3500-diff;
+  if (real_pos > 3500)
+  {
+    int diff = position - 3500;
+    Input = 3500 - diff;
   }
-  else{
+  else
+  {
     Input = position;
   }
 
@@ -282,78 +323,89 @@ void PID_test(int position, int goal){
   myPID.Compute();
   Serial.print(" ");
   Serial.print(Output);
-  
-  if(real_pos > 3500){
-    turn(255, 255-Output, 2);
+
+  if (real_pos > 3500)
+  {
+    turn(255, 255 - Output, 2);
     Serial.print("Gauche : ");
     Serial.print(255);
     Serial.print(" Droite : ");
-    Serial.println(255-Output);
+    Serial.println(255 - Output);
   }
-  else{
-    turn(255-Output, 255, 2);
+  else
+  {
+    turn(255 - Output, 255, 2);
     Serial.print("Gauche : ");
-    Serial.print(255-Output);
+    Serial.print(255 - Output);
     Serial.print(" Droite : ");
     Serial.println(255);
   }
-
 }
 
 void setup()
 {
+
+  strip.begin(); // Initialize pins for output
+  strip.setBrightness(20);
+  strip.show(); // Turn all LEDs off ASAP
+
   Serial.begin(115200);
   // configure the sensors
-/*
-  Serial.println("Booting");
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-  while (WiFi.waitForConnectResult() != WL_CONNECTED)
-  {
-    Serial.println("Connection Failed! Rebooting...");
-    delay(5000);
-    ESP.restart();
-  }
+  /*
+    Serial.println("Booting");
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid, password);
+    while (WiFi.waitForConnectResult() != WL_CONNECTED)
+    {
+      Serial.println("Connection Failed! Rebooting...");
+      delay(5000);
+      ESP.restart();
+    }
 
-  initOTA();
+    initOTA();
 
-  Serial.println("Ready");
-  Serial.print("IP address: ");
-  Serial.println(WiFi.localIP());
-*/
-  qtr.setTypeRC();
-  //qtr.setSensorPins((const uint8_t[]){21, 18, 12, 27, 14, 32, 15, 33}, SensorCount);
-  qtr.setSensorPins((const uint8_t[]){19, 12, 27, 33, 32, 15, 14, 21}, SensorCount);
-  calibrationLine();
+    Serial.println("Ready");
+    Serial.print("IP address: ");
+    Serial.println(WiFi.localIP());
+  */
+  
+    qtr.setTypeRC();
+    //qtr.setSensorPins((const uint8_t[]){21, 18, 12, 27, 14, 32, 15, 33}, SensorCount);
+    qtr.setSensorPins((const uint8_t[]){19, 12, 27, 33, 32, 15, 14, 21}, SensorCount);
+    calibrationLine();
 
-  if (!AFMS.begin())
-  { // create with the default frequency 1.6KHz
-    // if (!AFMS.begin(1000)) {  // OR with a different frequency, say 1KHz
-    Serial.println("Could not find Motor Shield. Check wiring.");
-    while (1)
-      ;
-  }
-  Serial.println("Motor Shield found.");
-  // Set the speed to start, from 0 (off) to 255 (max speed)
-  myMotor1->setSpeed(250);
-  myMotor1->run(FORWARD);
-  myMotor1->run(RELEASE);
-
+    if (!AFMS.begin())
+    { // create with the default frequency 1.6KHz
+      // if (!AFMS.begin(1000)) {  // OR with a different frequency, say 1KHz
+      Serial.println("Could not find Motor Shield. Check wiring.");
+      while (1)
+        ;
+    }
+    Serial.println("Motor Shield found.");
+    // Set the speed to start, from 0 (off) to 255 (max speed)
+    myMotor1->setSpeed(250);
+    myMotor1->run(FORWARD);
+    myMotor1->run(RELEASE);
 }
 
 void loop()
 {
   // read calibrated sensor values and obtain a measure of the line position
   // from 0 to 5000 (for a white line, use readLineWhite() instead)
-  //ArduinoOTA.handle();
-  
+  // ArduinoOTA.handle();
+
+  rainbow(10);
+/*
+  getDistanceUS();
+  delay(250);
+*/
+  /*
   int pos = getPositionLine();
   // getDistanceUS();
 
-  /* V1 */
   LineFollower(pos);
-  
+  */
+
   /* V2 */
   // PID_test(pos,3500);
-
 }
