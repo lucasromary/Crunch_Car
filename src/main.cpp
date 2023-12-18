@@ -44,6 +44,7 @@ Adafruit_DCMotor *myMotor3 = AFMS.getMotor(2);
 Adafruit_DCMotor *myMotor4 = AFMS.getMotor(3);
 
 Adafruit_DCMotor tab[] = {*myMotor1, *myMotor2, *myMotor3, *myMotor4};
+
 int speed_gauche = 0;
 int speed_droite = 0;
 
@@ -78,8 +79,10 @@ double Kp = 0.075, Ki = 0.001, Kd = 0.005; // 0.1 OK
 // Kp=0.05, Ki=0.005, Kd=0.005; sympa
 PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
 
-void rainbow(int wait)
-{
+TaskHandle_t Task1;
+TaskHandle_t Task2;
+
+void rainbow(int wait){
   // Hue of first pixel runs 5 complete loops through the color wheel.
   // Color wheel has a range of 65536 but it's OK if we roll over, so
   // just count from 0 to 5*65536. Adding 256 to firstPixelHue each time
@@ -180,8 +183,7 @@ void calibrationLine()
   Serial.println();
 }
 
-int getPositionLine()
-{
+int getPositionLine(){
   uint16_t position = qtr.readLineBlack(sensorValues);
 
   for (uint8_t i = 0; i < SensorCount; i++)
@@ -194,15 +196,7 @@ int getPositionLine()
   return position;
 }
 
-int getDistanceUS()
-{
-  RangeInCentimeters = ultrasonic.read(CM); // two measurements should keep an interval
-  Serial.println(RangeInCentimeters);                       // 0~400cm
-  //Serial.println(" cm");
-}
-
-void turn(int speed_gauche, int speed_droite, int sens)
-{
+void turn(int speed_gauche, int speed_droite, int sens){
   uint8_t i = 0;
   /*
   for (int j = 0; j < 4; j++)
@@ -342,6 +336,41 @@ void PID_test(int position, int goal)
   }
 }
 
+int checkDistanceUS()
+{
+  RangeInCentimeters = ultrasonic.read(CM); // two measurements should keep an interval
+  // Serial.println(RangeInCentimeters);       // 0~400cm
+  if (RangeInCentimeters < 10)
+  {
+    stop();
+    return 1;
+  }
+
+  return 0;
+  // Serial.println(" cm");
+}
+
+void Task1code(void *pvParameters)
+{
+  while (true)
+  {
+    int pos = getPositionLine();
+    if (!checkDistanceUS())
+    {
+      LineFollower(pos);
+    }
+  }
+}
+
+// Task2code: blinks an LED every 700 ms
+void Task2code(void *pvParameters)
+{
+  while (true)
+  {
+    rainbow(10);
+  }
+}
+
 void setup()
 {
 
@@ -368,24 +397,44 @@ void setup()
     Serial.print("IP address: ");
     Serial.println(WiFi.localIP());
   */
-  
-    qtr.setTypeRC();
-    //qtr.setSensorPins((const uint8_t[]){21, 18, 12, 27, 14, 32, 15, 33}, SensorCount);
-    qtr.setSensorPins((const uint8_t[]){19, 12, 27, 33, 32, 15, 14, 21}, SensorCount);
-    calibrationLine();
 
-    if (!AFMS.begin())
-    { // create with the default frequency 1.6KHz
-      // if (!AFMS.begin(1000)) {  // OR with a different frequency, say 1KHz
-      Serial.println("Could not find Motor Shield. Check wiring.");
-      while (1)
-        ;
-    }
-    Serial.println("Motor Shield found.");
-    // Set the speed to start, from 0 (off) to 255 (max speed)
-    myMotor1->setSpeed(250);
-    myMotor1->run(FORWARD);
-    myMotor1->run(RELEASE);
+  qtr.setTypeRC();
+  // qtr.setSensorPins((const uint8_t[]){21, 18, 12, 27, 14, 32, 15, 33}, SensorCount);
+  qtr.setSensorPins((const uint8_t[]){19, 12, 27, 33, 32, 15, 14, 21}, SensorCount);
+  calibrationLine();
+
+  if (!AFMS.begin())
+  { // create with the default frequency 1.6KHz
+    // if (!AFMS.begin(1000)) {  // OR with a different frequency, say 1KHz
+    Serial.println("Could not find Motor Shield. Check wiring.");
+    while (1)
+      ;
+  }
+  Serial.println("Motor Shield found.");
+  // Set the speed to start, from 0 (off) to 255 (max speed)
+  myMotor1->setSpeed(250);
+  myMotor1->run(FORWARD);
+  myMotor1->run(RELEASE);
+
+  xTaskCreatePinnedToCore(
+      Task1code, /* Task function. */
+      "Task1",   /* name of task. */
+      10000,     /* Stack size of task */
+      NULL,      /* parameter of the task */
+      2,         /* priority of the task */
+      &Task1,    /* Task handle to keep track of created task */
+      0);        /* pin task to core 0 */
+  delay(500);
+
+  // create a task that will be executed in the Task2code() function, with priority 1 and executed on core 1
+  xTaskCreatePinnedToCore(
+      Task2code, /* Task function. */
+      "Task2",   /* name of task. */
+      10000,     /* Stack size of task */
+      NULL,      /* parameter of the task */
+      2,         /* priority of the task */
+      &Task2,    /* Task handle to keep track of created task */
+      1);        /* pin task to core 1 */
 }
 
 void loop()
@@ -393,18 +442,6 @@ void loop()
   // read calibrated sensor values and obtain a measure of the line position
   // from 0 to 5000 (for a white line, use readLineWhite() instead)
   // ArduinoOTA.handle();
-
-  rainbow(10);
-/*
-  getDistanceUS();
-  delay(250);
-*/
-  /*
-  int pos = getPositionLine();
-  // getDistanceUS();
-
-  LineFollower(pos);
-  */
 
   /* V2 */
   // PID_test(pos,3500);
